@@ -103,6 +103,9 @@ def classify_and_parse(
     # Strip control characters that Gemma4 sometimes emits inside strings
     raw = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", raw)
 
+    # Fix invalid JSON escapes (e.g., a single backslash not followed by a valid escape char)
+    raw = re.sub(r"\\\\(?![\"\\\\/bfnrtu])", r"\\\\\\\\", raw)
+
     result = json.loads(raw)
 
     if subject_area_override and subject_area_override in subject_areas:
