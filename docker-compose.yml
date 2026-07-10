@@ -2,6 +2,9 @@ services:
   rabbithole:
     build: .
     container_name: rabbithole
+    labels:
+      kuma.rabbithole.http.name: "Rabbithole"
+      kuma.rabbithole.http.url: "http://10.10.10.13:8095/"
     restart: unless-stopped
     ports:
       - "8095:8095"
