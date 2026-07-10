@@ -3,15 +3,30 @@ import logging
 import urllib.request
 import urllib.parse
 from typing import Optional, Tuple
+from urllib.parse import parse_qs, urlparse
 
 logger = logging.getLogger("rabbithole.transcriber")
 
-YOUTUBE_ID_RE = re.compile(r'(?:youtube\.com/watch\?(?:[^&\s]*&)*v=|youtu\.be/)([\w-]+)')
+YOUTUBE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
 
 
 def extract_video_id(url: str) -> Optional[str]:
-    m = YOUTUBE_ID_RE.search(url)
-    return m.group(1) if m else None
+    parsed = urlparse(url.strip())
+    host = parsed.netloc.lower().removeprefix("www.")
+    path_parts = [part for part in parsed.path.split("/") if part]
+
+    candidate = None
+    if host == "youtu.be" and path_parts:
+        candidate = path_parts[0]
+    elif host in {"youtube.com", "m.youtube.com", "music.youtube.com"}:
+        if parsed.path == "/watch":
+            candidate = parse_qs(parsed.query).get("v", [None])[0]
+        elif len(path_parts) >= 2 and path_parts[0] in {"shorts", "embed", "live"}:
+            candidate = path_parts[1]
+
+    if candidate and YOUTUBE_ID_RE.fullmatch(candidate):
+        return candidate
+    return None
 
 
 def normalize_url(url: str) -> str:
