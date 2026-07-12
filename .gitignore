@@ -1,4 +1,3 @@
-# Runtime data (Docker volume contents if mounted locally)
 data/
 *.db
 *.sqlite
@@ -18,7 +17,6 @@ build/
 *.env
 config.json
 
-# Docker
 *.log
 
 # OS
