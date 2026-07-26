@@ -55,21 +55,54 @@ Return ONLY valid JSON with a single "summary" field:
 """
 
 
-def _call_local(prompt: str, config: dict) -> str:
+def _call_local(prompt: str, config: dict, system: str = None, model: str = None) -> str:
     from openai import OpenAI
     url = config.get("local_llm_url", "https://opencode.ai/zen")
-    model = config.get("local_llm_model", "deepseek-v4-flash-free")
+    mdl = model or config.get("local_llm_model", "deepseek-v4-flash-free")
+    sysp = system or _SYSTEM
     api_key = os.environ.get("LLM_API_KEY", "none")
     client = OpenAI(base_url=f"{url.rstrip('/')}/v1", api_key=api_key)
     response = client.chat.completions.create(
-        model=model,
-        max_tokens=4096,
+        model=mdl,
+        max_tokens=8192,
         messages=[
-            {"role": "system", "content": _SYSTEM},
+            {"role": "system", "content": sysp},
             {"role": "user", "content": prompt},
         ]
     )
     return response.choices[0].message.content.strip()
+
+
+_DISTILL_PROMPT = """You are a transcript editor. Clean up this YouTube transcript into a readable report.
+
+Rules:
+- Remove filler words (um, uh, like, you know, etc.), stutters, and false starts
+- Organize into proper paragraphs by topic
+- Keep EVERY fact, name, number, quote, and detail — nothing omitted
+- Preserve the speaker's meaning and context exactly
+- Keep all timestamps [MM:SS] at the start of each paragraph
+- Output in the same format: paragraphs starting with [MM:SS]
+
+Transcript:
+{transcript}
+
+Return ONLY the cleaned transcript, no preamble or explanation."""
+
+
+def distill_transcript(transcript: str, config: dict, title: str = "") -> str:
+    """Clean up transcript into readable distilled report using mimo-v2.5-free (200K ctx)."""
+    DISTILL_SYS = "You clean up YouTube transcripts. Remove filler words, organize paragraphs, keep every fact and [MM:SS] timestamp."
+    try:
+        chunk = transcript[:15000]
+        prompt = _DISTILL_PROMPT.format(transcript=chunk)
+        raw = _call_local(prompt, config, system=DISTILL_SYS, model="mimo-v2.5-free")
+        raw = re.sub(r"^```(?:text)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        if raw.strip():
+            return raw.strip()
+    except Exception as e:
+        logger.warning(f"Distillation failed: {e}")
+    return transcript[:6000] + "\n\n[...transcript truncated...]"
 
 
 def call_llm(prompt: str, config: dict) -> str:
