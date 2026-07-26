@@ -3,7 +3,7 @@ import json
 import os
 from typing import List, Dict, Optional
 
-DB_PATH = "/app/data/rabbithole.db"
+DB_PATH = "/opt/destillo/data/destillo.db"
 
 
 def get_conn():
@@ -24,7 +24,6 @@ def init_db():
                 channel       TEXT,
                 subject_area  TEXT,
                 file_path     TEXT,
-                docmost_page_id TEXT,
                 processed_at  TEXT,
                 source        TEXT DEFAULT 'manual',
                 status        TEXT DEFAULT 'queued',
@@ -35,9 +34,18 @@ def init_db():
                 created_at    TEXT DEFAULT (datetime('now'))
             )
         """)
-        # Migrate: add status_message if missing
         try:
             conn.execute("ALTER TABLE items ADD COLUMN status_message TEXT")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE items ADD COLUMN favorite INTEGER DEFAULT 0")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE items ADD COLUMN updated_at TEXT")
             conn.commit()
         except Exception:
             pass
@@ -45,19 +53,37 @@ def init_db():
         conn.commit()
 
 
-def add_item(url: str, source: str = "manual", subject_area_override: str = None) -> int:
-    """Insert item. Returns rowid, or -1 if URL already exists."""
+def add_item(url: str, source: str = "manual", subject_area_override: str = None, status: str = "queued") -> int:
     with get_conn() as conn:
         try:
             cur = conn.execute(
-                "INSERT INTO items (url, source, status, subject_area) VALUES (?, ?, 'queued', ?)",
-                (url, source, subject_area_override)
+                "INSERT INTO items (url, source, status, subject_area) VALUES (?, ?, ?, ?)",
+                (url, source, status, subject_area_override)
             )
             conn.commit()
             return cur.lastrowid
         except sqlite3.IntegrityError:
             row = conn.execute("SELECT id FROM items WHERE url = ?", (url,)).fetchone()
             return row["id"] if row else -1
+
+
+def get_deferred_items() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM items WHERE status = 'deferred' ORDER BY created_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def process_deferred() -> int:
+    count = 0
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE items SET status = 'queued' WHERE status = 'deferred'"
+        )
+        count = cur.rowcount
+        conn.commit()
+    return count
 
 
 def update_item(item_id: int, **kwargs):
@@ -80,7 +106,9 @@ def get_queued_items() -> List[Dict]:
 
 def get_items(limit: int = 20, offset: int = 0,
               subject_area: str = None, search: str = None,
-              include_active: bool = False) -> List[Dict]:
+              include_active: bool = False,
+              favorite: int = None,
+              tag: str = None, channel: str = None) -> List[Dict]:
     if include_active:
         q = "SELECT * FROM items WHERE 1=1"
     else:
@@ -88,6 +116,12 @@ def get_items(limit: int = 20, offset: int = 0,
     p = []
     if subject_area:
         q += " AND subject_area = ?"; p.append(subject_area)
+    if favorite is not None:
+        q += " AND favorite = ?"; p.append(favorite)
+    if tag:
+        q += " AND tags LIKE ?"; p.append(f'%"{tag}"%')
+    if channel:
+        q += " AND channel = ?"; p.append(channel)
     if search:
         q += " AND (title LIKE ? OR summary LIKE ? OR tags LIKE ? OR channel LIKE ?)"
         s = f"%{search}%"; p.extend([s, s, s, s])
@@ -121,14 +155,42 @@ def get_stats() -> Dict:
     with get_conn() as conn:
         total   = conn.execute("SELECT COUNT(*) FROM items WHERE status='done'").fetchone()[0]
         queued  = conn.execute("SELECT COUNT(*) FROM items WHERE status='queued'").fetchone()[0]
+        deferred = conn.execute("SELECT COUNT(*) FROM items WHERE status='deferred'").fetchone()[0]
         proc    = conn.execute("SELECT COUNT(*) FROM items WHERE status='processing'").fetchone()[0]
         errors  = conn.execute("SELECT COUNT(*) FROM items WHERE status='error'").fetchone()[0]
         by_area = conn.execute(
             "SELECT subject_area, COUNT(*) as count FROM items "
             "WHERE status='done' GROUP BY subject_area ORDER BY count DESC"
         ).fetchall()
-        return {"total": total, "queued": queued, "processing": proc,
+        return {"total": total, "queued": queued, "deferred": deferred, "processing": proc,
                 "errors": errors, "by_subject_area": [dict(r) for r in by_area]}
+
+
+def get_tags() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT tags FROM items WHERE status='done' AND tags IS NOT NULL AND tags != '[]'"
+        ).fetchall()
+        counts = {}
+        for row in rows:
+            try:
+                t = json.loads(row["tags"])
+                if isinstance(t, list):
+                    for tag in t:
+                        counts[tag] = counts.get(tag, 0) + 1
+            except Exception:
+                pass
+        return sorted([{"tag": k, "count": v} for k, v in counts.items()], key=lambda x: -x["count"])
+
+
+def get_channels() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT channel, COUNT(*) as count FROM items WHERE status='done' "
+            "AND channel IS NOT NULL AND channel != '' "
+            "GROUP BY channel ORDER BY count DESC"
+        ).fetchall()
+        return [{"channel": r["channel"], "count": r["count"]} for r in rows]
 
 
 def delete_item(item_id: int):
