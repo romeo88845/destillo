@@ -492,7 +492,7 @@ function oM(id) {
     
     // Footer
     sheet.innerHTML += '<div style="padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap">'+
-      (item.file_path?'<a href="/api/library/'+item.id+'/file" target="_blank" class="btn btn-r" style="min-height:36px;padding:6px 14px;font-size:12px">Full Transcript ↗</a>':'')+
+      (item.file_path?'<a href="/api/library/'+item.id+'/file" download class="btn btn-r" style="min-height:36px;padding:6px 14px;font-size:12px">Download .md</a>': '')+
       (item.status==='error'?'<button class="btn btn-g" style="min-height:36px;padding:6px 12px;font-size:12px" onclick="rt('+item.id+')">Retry</button>':'')+
       '<button class="btn btn-red" style="min-height:36px;padding:6px 12px;font-size:12px" onclick="dl('+item.id+')">Remove</button></div>';
     
