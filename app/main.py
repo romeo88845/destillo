@@ -115,15 +115,26 @@ def trigger_process_deferred():
     return {"ok": True, "processed": count}
 
 
+@app.get("/api/tags")
+def get_tags():
+    return {"tags": db.get_tags()}
+
+
+@app.get("/api/channels")
+def get_channels():
+    return {"channels": db.get_channels()}
+
+
 @app.get("/api/library")
 def get_library(limit: int = 20, offset: int = 0,
                 subject_area: str = None, search: str = None,
                 include_active: bool = False,
-                favorite: int = None):
+                favorite: int = None, tag: str = None,
+                channel: str = None):
     items = db.get_items(limit=limit, offset=offset,
                          subject_area=subject_area, search=search,
                          include_active=include_active,
-                         favorite=favorite)
+                         favorite=favorite, tag=tag, channel=channel)
     return {"items": items}
 
 

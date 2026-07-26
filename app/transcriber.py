@@ -56,8 +56,32 @@ def get_transcript(url: str) -> Tuple[Optional[str], Optional[str], Optional[str
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         segs = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US", "en-GB"])
-        text = " ".join(s["text"] for s in segs)
-        text = re.sub(r'\s+', ' ', text).strip()
+        # Format transcript with timestamped paragraphs
+        paragraphs = []
+        current_para = []
+        last_ts = 0
+        for s in segs:
+            ts = int(s["start"])
+            if ts - last_ts >= 30 and current_para:
+                # Flush current paragraph with timestamp
+                mm, ss = divmod(last_ts, 60)
+                hh, mm = divmod(mm, 60)
+                ts_str = f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}"
+                text = " ".join(current_para).strip()
+                if text:
+                    paragraphs.append(f"[{ts_str}] {text}")
+                current_para = []
+            current_para.append(s["text"])
+            last_ts = ts
+        # Flush last paragraph
+        if current_para:
+            mm, ss = divmod(last_ts, 60)
+            hh, mm = divmod(mm, 60)
+            ts_str = f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}"
+            text = " ".join(current_para).strip()
+            if text:
+                paragraphs.append(f"[{ts_str}] {text}")
+        text = "\n\n".join(paragraphs)
         title, channel = _get_metadata(url)
         logger.info(f"[{video_id}] Transcript via youtube-transcript-api ({len(text)} chars)")
         return text, title, channel
@@ -219,6 +243,8 @@ def split_transcript_by_chapters(transcript: str, chapters: List[dict]) -> List[
         seg_words = words[start_w:end_w]
         result.append({
             "title": ch["title"],
+            "start": ch["start"],
+            "end": ch.get("end"),
             "text": " ".join(seg_words),
         })
     return result

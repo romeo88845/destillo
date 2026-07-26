@@ -107,7 +107,8 @@ def get_queued_items() -> List[Dict]:
 def get_items(limit: int = 20, offset: int = 0,
               subject_area: str = None, search: str = None,
               include_active: bool = False,
-              favorite: int = None) -> List[Dict]:
+              favorite: int = None,
+              tag: str = None, channel: str = None) -> List[Dict]:
     if include_active:
         q = "SELECT * FROM items WHERE 1=1"
     else:
@@ -117,6 +118,10 @@ def get_items(limit: int = 20, offset: int = 0,
         q += " AND subject_area = ?"; p.append(subject_area)
     if favorite is not None:
         q += " AND favorite = ?"; p.append(favorite)
+    if tag:
+        q += " AND tags LIKE ?"; p.append(f'%"{tag}"%')
+    if channel:
+        q += " AND channel = ?"; p.append(channel)
     if search:
         q += " AND (title LIKE ? OR summary LIKE ? OR tags LIKE ? OR channel LIKE ?)"
         s = f"%{search}%"; p.extend([s, s, s, s])
@@ -159,6 +164,33 @@ def get_stats() -> Dict:
         ).fetchall()
         return {"total": total, "queued": queued, "deferred": deferred, "processing": proc,
                 "errors": errors, "by_subject_area": [dict(r) for r in by_area]}
+
+
+def get_tags() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT tags FROM items WHERE status='done' AND tags IS NOT NULL AND tags != '[]'"
+        ).fetchall()
+        counts = {}
+        for row in rows:
+            try:
+                t = json.loads(row["tags"])
+                if isinstance(t, list):
+                    for tag in t:
+                        counts[tag] = counts.get(tag, 0) + 1
+            except Exception:
+                pass
+        return sorted([{"tag": k, "count": v} for k, v in counts.items()], key=lambda x: -x["count"])
+
+
+def get_channels() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT channel, COUNT(*) as count FROM items WHERE status='done' "
+            "AND channel IS NOT NULL AND channel != '' "
+            "GROUP BY channel ORDER BY count DESC"
+        ).fetchall()
+        return [{"channel": r["channel"], "count": r["count"]} for r in rows]
 
 
 def delete_item(item_id: int):
