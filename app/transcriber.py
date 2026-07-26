@@ -55,27 +55,28 @@ def get_transcript(url: str) -> Tuple[Optional[str], Optional[str], Optional[str
     # Strategy 1: youtube-transcript-api
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        segs = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US", "en-GB"])
-        # Format transcript with timestamped paragraphs
+        segs = YouTubeTranscriptApi().fetch(video_id, languages=["en", "en-US", "en-GB"])
+        # Format transcript with timestamped paragraphs (~30s intervals)
         paragraphs = []
         current_para = []
-        last_ts = 0
-        for s in segs:
-            ts = int(s["start"])
-            if ts - last_ts >= 30 and current_para:
-                # Flush current paragraph with timestamp
-                mm, ss = divmod(last_ts, 60)
+        last_flush = -1
+        for snippet in segs:
+            ts = int(snippet.start)
+            if last_flush < 0:
+                last_flush = ts
+            if ts >= last_flush + 30 and current_para:
+                mm, ss = divmod(last_flush, 60)
                 hh, mm = divmod(mm, 60)
                 ts_str = f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}"
                 text = " ".join(current_para).strip()
                 if text:
                     paragraphs.append(f"[{ts_str}] {text}")
                 current_para = []
-            current_para.append(s["text"])
-            last_ts = ts
+                last_flush = ts
+            current_para.append(snippet.text)
         # Flush last paragraph
         if current_para:
-            mm, ss = divmod(last_ts, 60)
+            mm, ss = divmod(last_flush, 60)
             hh, mm = divmod(mm, 60)
             ts_str = f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}"
             text = " ".join(current_para).strip()
