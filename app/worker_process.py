@@ -14,7 +14,7 @@ logger = logging.getLogger("destillo.worker")
 
 import database as db
 from config_manager import load_config
-from parser import classify_and_parse
+from parser import classify_and_parse, distill_transcript
 from storage import write_markdown
 from transcriber import get_transcript, get_chapters, split_transcript_by_chapters
 from gbrain_client import ingest as gbrain_ingest
@@ -60,9 +60,14 @@ def process(item_id: int):
         )
 
         db.update_item(item_id,
+                       status_message=f"Distilling transcript...")
+        cfg = load_config()
+        distilled = distill_transcript(transcript, cfg, title=title or "")
+
+        db.update_item(item_id,
                        status_message=f"Writing markdown → {parsed.get('subject_area', 'misc')}...")
 
-        filepath = write_markdown(url, title, channel, parsed, transcript=transcript)
+        filepath = write_markdown(url, title, channel, parsed, transcript=transcript, distilled=distilled)
 
         db.update_item(
             item_id,

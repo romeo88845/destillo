@@ -492,7 +492,7 @@ function oM(id) {
     
     // Footer
     sheet.innerHTML += '<div style="padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap">'+
-      (item.file_path?'<button class="btn btn-g" style="min-height:36px;padding:6px 14px;font-size:12px" onclick="showRaw('+item.id+')">Raw</button><button class="btn btn-b" style="min-height:36px;padding:6px 14px;font-size:12px" onclick="copyDistill('+item.id+')">Copy Distill</button><button class="btn btn-g" style="min-height:36px;padding:6px 14px;font-size:12px" onclick="uploadToFT('+item.id+'))">Send to Tutor</button><a href="/api/library/'+item.id+'/file" download class="btn btn-r" style="min-height:36px;padding:6px 14px;font-size:12px">Download .md</a>': '')+
+      (item.file_path?'<button class="btn btn-g" style="min-height:36px;padding:6px 14px;font-size:12px" onclick="showRaw('+item.id+')">Raw</button><a href="/api/library/'+item.id+'/file" download class="btn btn-r" style="min-height:36px;padding:6px 14px;font-size:12px">Download .md</a>': '')+
       (item.status==='error'?'<button class="btn btn-g" style="min-height:36px;padding:6px 12px;font-size:12px" onclick="rt('+item.id+')">Retry</button>':'')+
       '<button class="btn btn-red" style="min-height:36px;padding:6px 12px;font-size:12px" onclick="dl('+item.id+')">Remove</button></div>';
     
@@ -621,18 +621,6 @@ async function saveSet(){
 }
 
 /* Show raw transcript overlay */
-async function uploadToFT(id){
-  const btn = event.target; const orig = btn.textContent;
-  btn.textContent = 'Sending...'; btn.disabled = true;
-  try {
-    const r = await fetch('/api/fast-tutor/'+id, {method:'POST'});
-    const d = await r.json();
-    btn.textContent = d.status === 'ok' ? '✅ Sent ('+d.result.lessons_created+' lessons)' : '❌ Failed';
-    setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 3000);
-  } catch(e) {
-    btn.textContent = '❌ Error'; btn.disabled = false;
-  }
-}
 function showRaw(id){
   fetch('/api/library/'+id+'/file').then(r=>r.text()).then(md => {
     const idx = md.indexOf('## Raw Transcript');
@@ -653,27 +641,6 @@ function showRaw(id){
   }).catch(() => t('Failed to load raw transcript.','err'));
 }
 
-
-/* Copy distilled report to clipboard */
-function copyDistill(id){
-  var item = mi;
-  if(!item || !item.file_path){ t('No file to capture','err'); return; }
-  var subj = item.subject_area || 'uncategorized';
-  var label = 'Subject: ' + subj + '\n' + item.file_path;
-  try {
-    navigator.clipboard.writeText(label).then(function(){ t('Copied ✓'); }).catch(function(){
-      copyFallback(label);
-    });
-  } catch(e){ copyFallback(label); }
-}
-function copyFallback(text){
-  var ta = document.createElement('textarea');
-  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); t('Copied ✓'); }
-  catch(e){ t('Copy failed','err'); }
-  document.body.removeChild(ta);
-}
 /* Bulk bar */
 document.getElementById('bulk-cx').addEventListener('click', () => { sel.clear(); document.getElementById('bulk').classList.remove('s'); });
 document.getElementById('bulk-ap').addEventListener('click', applyBulk);

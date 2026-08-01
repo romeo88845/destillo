@@ -496,3 +496,32 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/")
 def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+import urllib.request, json as json_mod
+
+@app.post("/api/fast-tutor/{item_id}")
+def upload_to_fast_tutor(item_id: int):
+    """Upload a Destillo item to Fast-Tutor."""
+    # Get the file content from database
+    import os
+    md = None
+    item = db.get_item(item_id)
+    if item and item.get("file_path"):
+        fp = item["file_path"]
+        if os.path.exists(fp):
+            md = open(fp).read()
+    
+    if not md:
+        raise HTTPException(404, "No content found for this item")
+    
+    # Forward to Fast-Tutor
+    url = "http://127.0.0.1:8411/api/ingest"
+    data = json_mod.dumps({"content": md, "exam_code": "MS-Intune"}).encode()
+    req = urllib.request.Request(url, data=data, method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        resp = urllib.request.urlopen(req)
+        result = json_mod.loads(resp.read())
+        return result
+    except Exception as e:
+        raise HTTPException(502, f"Fast-Tutor error: {str(e)}")

@@ -42,7 +42,7 @@ def _detect_series(title: Optional[str]) -> Optional[dict]:
 
 
 def write_markdown(url: str, title: str, channel: str, parsed: Dict,
-                   transcript: str = None) -> str:
+                   transcript: str = None, distilled: str = None) -> str:
     config = load_config()
     subject_area = parsed.get("subject_area", "misc")
     storage_path = get_subject_area_path(config, subject_area)
@@ -127,8 +127,12 @@ def write_markdown(url: str, title: str, channel: str, parsed: Dict,
     lines += ["", "## My Notes", ""]
     lines.append("")
 
+    if distilled:
+        lines += ["", "## Distilled Report", ""]
+        lines.append(distilled)
+
     if transcript:
-        lines += ["", "## Full Transcript", ""]
+        lines += ["", "## Raw Transcript", ""]
         lines.append(transcript)
 
     lines.append("")
